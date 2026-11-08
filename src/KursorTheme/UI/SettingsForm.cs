@@ -6,7 +6,7 @@ using KursorTheme.UI.Controls;
 
 namespace KursorTheme.UI;
 
-internal sealed class SettingsForm : Form
+internal sealed class SettingsForm : Form, IMessageFilter
 {
     private static readonly (string Title, string Subtitle)[] Pages =
     {
@@ -19,6 +19,7 @@ internal sealed class SettingsForm : Form
     private readonly SettingsHub _hub;
     private readonly Action _testSelection;
     private readonly Panel _body;
+    private readonly Panel _content;
     private readonly Label _titleLabel;
     private readonly Label _subtitleLabel;
     private readonly Label _statusLabel;
@@ -26,10 +27,15 @@ internal sealed class SettingsForm : Form
     private readonly Label _presetLabel;
     private readonly List<NavButton> _navButtons = new();
     private readonly ThinScrollBar _scrollBar;
+    private readonly List<Chip> _trailChips = new();
+    private readonly List<Chip> _particleChips = new();
+    private readonly List<Chip> _rippleChips = new();
+    private readonly List<PresetCard> _presetCards = new();
 
     private float _scale = 1f;
     private int _page = -1;
     private int _y;
+    private int _scrollOffset;
     private bool _syncingScroll;
 
     public SettingsForm(SettingsHub hub, Action testSelection)
@@ -43,7 +49,6 @@ internal sealed class SettingsForm : Form
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
         ClientSize = new Size(1040, 720);
-        TopMost = true;
         Location = new Point(
             Math.Max(0, (Screen.PrimaryScreen?.Bounds.Width ?? 1920) - 1040) / 2,
             Math.Max(0, (Screen.PrimaryScreen?.Bounds.Height ?? 1080) - 720) / 2);
@@ -123,7 +128,7 @@ internal sealed class SettingsForm : Form
 
         var version = new Label
         {
-            Text = "Kursor Theme 0.2",
+            Text = "Kursor Theme 0.5",
             Font = Theme.Tiny,
             ForeColor = Theme.TextFaint,
             BackColor = Theme.BgElevated,
@@ -204,10 +209,18 @@ internal sealed class SettingsForm : Form
             Location = new Point(272, 124),
             Size = new Size(ClientSize.Width - 272 - 36, ClientSize.Height - 124 - 36),
             BackColor = Theme.Bg,
-            AutoScroll = true,
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom,
         };
         Controls.Add(_body);
+
+        _content = new Panel
+        {
+            BackColor = Theme.Bg,
+            Location = new Point(0, 0),
+            Size = new Size(_body.ClientSize.Width, 0),
+            Anchor = AnchorStyles.None,
+        };
+        _body.Controls.Add(_content);
 
         _scrollBar = new ThinScrollBar
         {
@@ -222,14 +235,14 @@ internal sealed class SettingsForm : Form
         _scrollBar.ValueChanged += (_, _) =>
         {
             if (_syncingScroll) return;
-            _syncingScroll = true;
-            _body.AutoScrollPosition = new Point(0, _scrollBar.Value);
-            _syncingScroll = false;
+            SetScrollOffset(_scrollBar.Value);
         };
-        _body.Scroll += (_, _) =>
+
+        _body.Resize += (_, _) =>
         {
-            HideNativeScrollbar();
-            if (!_syncingScroll) UpdateScrollBar();
+            _content.Width = _body.ClientSize.Width;
+            _content.Top = -_scrollOffset;
+            UpdateScrollBar();
         };
 
         // ---------- Window chrome ----------
@@ -271,6 +284,25 @@ internal sealed class SettingsForm : Form
         }
     }
 
+    protected override void OnActivated(EventArgs e)
+    {
+        base.OnActivated(e);
+        // Keep the panel above widgets while the user works with it...
+        TopMost = true;
+        if (IsHandleCreated)
+        {
+            NativeMethods.SetWindowPos(Handle, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+                NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+        }
+    }
+
+    protected override void OnDeactivate(EventArgs e)
+    {
+        base.OnDeactivate(e);
+        // ...but let it go behind the browser/other apps as soon as it loses focus.
+        TopMost = false;
+    }
+
     protected override void OnShown(EventArgs e)
     {
         base.OnShown(e);
@@ -281,45 +313,58 @@ internal sealed class SettingsForm : Form
             workingArea.Left + Math.Max(0, (workingArea.Width - Width) / 2),
             workingArea.Top + Math.Max(0, (workingArea.Height - Height) / 2));
 
+        _content.Width = _body.ClientSize.Width;
         _scrollBar.SetBounds(_body.Right - S(14), _body.Top + S(6), S(10), _body.Height - S(12));
-        HideNativeScrollbar();
         UpdateScrollBar();
+        SetScrollOffset(0);
 
-        try
-        {
-            NativeMethods.SetWindowTheme(_body.Handle, "DarkMode_Explorer", null);
-        }
-        catch
-        {
-            // Ignore theming failures.
-        }
-
+        Application.RemoveMessageFilter(this);
+        Application.AddMessageFilter(this);
         UpdateStatus();
     }
 
-    private void HideNativeScrollbar()
+    public bool PreFilterMessage(ref Message message)
     {
-        if (!_body.IsHandleCreated) return;
-        try
-        {
-            NativeMethods.ShowScrollBar(_body.Handle, NativeMethods.SB_VERT, false);
-        }
-        catch
-        {
-            // Ignore.
-        }
+        const int wmMouseWheel = 0x020A;
+        if (message.Msg != wmMouseWheel || IsDisposed || !IsHandleCreated) return false;
+
+        var bodyBounds = _body.RectangleToScreen(_body.ClientRectangle);
+        if (!bodyBounds.Contains(Cursor.Position)) return false;
+
+        var delta = (short)((long)message.WParam >> 16);
+        if (delta == 0) return false;
+
+        SetScrollOffset(_scrollOffset - Math.Sign(delta) * S(96));
+        return true;
     }
 
     private void UpdateScrollBar()
     {
-        var content = _body.AutoScrollMinSize.Height;
+        var contentHeight = Math.Max(0, _content.Height);
         var viewport = _body.ClientSize.Height;
-        var maximum = Math.Max(0, content - viewport);
+        var maximum = Math.Max(0, contentHeight - viewport);
 
         _scrollBar.Maximum = maximum;
-        _scrollBar.ViewportRatio = content <= 0 ? 1f : Math.Clamp(viewport / (float)content, 0.06f, 1f);
-        _scrollBar.Value = Math.Clamp(-_body.AutoScrollPosition.Y, 0, maximum);
+        _scrollBar.ViewportRatio = contentHeight <= 0 ? 1f : Math.Clamp(viewport / (float)contentHeight, 0.06f, 1f);
+
+        if (_scrollOffset > maximum) _scrollOffset = maximum;
+        _syncingScroll = true;
+        _scrollBar.Value = Math.Clamp(_scrollOffset, 0, maximum);
+        _syncingScroll = false;
         _scrollBar.Visible = maximum > 0;
+        _scrollBar.Invalidate();
+    }
+
+    private void SetScrollOffset(int value)
+    {
+        var viewport = _body.ClientSize.Height;
+        var maximum = Math.Max(0, _content.Height - viewport);
+        _scrollOffset = Math.Clamp(value, 0, maximum);
+        _content.Top = -_scrollOffset;
+
+        _syncingScroll = true;
+        _scrollBar.Value = _scrollOffset;
+        _syncingScroll = false;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -344,11 +389,13 @@ internal sealed class SettingsForm : Form
         BuildPage();
     }
 
-    private void BuildPage()
+    private void BuildPage(bool preserveScroll = false)
     {
-        _body.SuspendLayout();
-        foreach (Control control in _body.Controls) control.Dispose();
-        _body.Controls.Clear();
+        var previousOffset = _scrollOffset;
+
+        _content.SuspendLayout();
+        foreach (Control control in _content.Controls) control.Dispose();
+        _content.Controls.Clear();
 
         _y = S(4);
 
@@ -368,20 +415,12 @@ internal sealed class SettingsForm : Form
                 break;
         }
 
-        _body.AutoScrollMinSize = new Size(0, _y + S(28));
-        _body.AutoScrollPosition = new Point(0, 0);
-        _body.ResumeLayout(true);
+        _content.Height = _y + S(28);
+        _content.Width = _body.ClientSize.Width;
+        _content.ResumeLayout(true);
 
-        HideNativeScrollbar();
         UpdateScrollBar();
-        if (IsHandleCreated)
-        {
-            BeginInvoke(new Action(() =>
-            {
-                HideNativeScrollbar();
-                UpdateScrollBar();
-            }));
-        }
+        SetScrollOffset(preserveScroll ? previousOffset : 0);
     }
 
     private Panel NewRow(int height, int gapBefore = 0)
@@ -395,7 +434,7 @@ internal sealed class SettingsForm : Form
             Location = new Point(S(28), _y),
             Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
         };
-        _body.Controls.Add(row);
+        _content.Controls.Add(row);
         _y += S(height);
         return row;
     }
@@ -558,6 +597,104 @@ internal sealed class SettingsForm : Form
         row.Controls.Add(descriptionLabel);
     }
 
+    private List<Chip> ChipRow(string title, IReadOnlyList<(string Text, bool Selected, Action OnClick)> items)
+    {
+        var chips = new List<Chip>(items.Count);
+        if (items.Count == 0) return chips;
+
+        var available = Math.Max(S(200), ContentWidth - S(4));
+        var widths = new List<int>(items.Count);
+        var total = 0;
+        foreach (var item in items)
+        {
+            var width = TextRenderer.MeasureText(item.Text, Theme.Small).Width + S(26);
+            widths.Add(width);
+            total += width + S(6);
+        }
+
+        var lines = Math.Max(1, (int)Math.Ceiling(total / (double)available));
+        var height = S(24) + lines * S(32) + S(4);
+        var row = NewRow(height, 2);
+
+        var label = MakeLabel(title, Theme.Body, Theme.Text, 0, 0, row.Width, S(20));
+        label.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        row.Controls.Add(label);
+
+        var flow = new FlowLayoutPanel
+        {
+            Location = new Point(0, S(24)),
+            Size = new Size(row.Width, height - S(24)),
+            BackColor = Theme.Bg,
+            WrapContents = true,
+            AutoScroll = false,
+            Padding = new Padding(0),
+            Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+        };
+        row.Controls.Add(flow);
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var item = items[i];
+            var chip = new Chip
+            {
+                Text = item.Text,
+                Selected = item.Selected,
+                Size = new Size(widths[i], S(26)),
+                Margin = new Padding(0, 0, S(6), S(6)),
+            };
+            chip.Click += (_, _) => item.OnClick();
+            flow.Controls.Add(chip);
+            chips.Add(chip);
+        }
+
+        return chips;
+    }
+
+    private void ApplyTrailStyle(TrailStylePreset preset)
+    {
+        _hub.Update(settings => settings.TrailStyle = preset.Style);
+        UpdateTrailChipSelection(preset.Style);
+    }
+
+    private void ApplyParticleStyle(ParticleStylePreset preset)
+    {
+        _hub.Update(settings => settings.ParticleStyle = preset.Style);
+        UpdateParticleChipSelection(preset.Style);
+    }
+
+    private void ApplyRippleStyle(RippleStylePreset preset)
+    {
+        _hub.Update(settings => settings.RippleStyle = preset.Style);
+        UpdateRippleChipSelection(preset.Style);
+    }
+
+    private void UpdateTrailChipSelection(TrailStyle style)
+    {
+        for (var i = 0; i < _trailChips.Count && i < TrailStylePresets.All.Count; i++)
+        {
+            if (_trailChips[i].IsDisposed) continue;
+            _trailChips[i].Selected = TrailStylePresets.All[i].Style == style;
+        }
+    }
+
+    private void UpdateParticleChipSelection(ParticleStyle style)
+    {
+        for (var i = 0; i < _particleChips.Count && i < ParticleStylePresets.All.Count; i++)
+        {
+            if (_particleChips[i].IsDisposed) continue;
+            _particleChips[i].Selected = ParticleStylePresets.All[i].Style == style;
+        }
+    }
+
+    private void UpdateRippleChipSelection(RippleStyle style)
+    {
+        for (var i = 0; i < _rippleChips.Count && i < RippleStylePresets.All.Count; i++)
+        {
+            if (_rippleChips[i].IsDisposed) continue;
+            _rippleChips[i].Selected = RippleStylePresets.All[i].Style == style;
+        }
+    }
+
     private void MutateLook(Action<AppSettings> mutate) =>
         _hub.Update(settings =>
         {
@@ -627,6 +764,15 @@ internal sealed class SettingsForm : Form
             () => _hub.Current.Trail.Color,
             color => MutateLook(settings => settings.Trail.Color = color));
 
+        Section("Стиль шлейфа", "Только форма: длина, толщина, прозрачность и цвет не меняются");
+        _trailChips.Clear();
+        _trailChips.AddRange(ChipRow("Пресеты шлейфа", TrailStylePresets.All
+            .Select(preset => (
+                Text: preset.Name,
+                Selected: _hub.Current.TrailStyle == preset.Style,
+                OnClick: (Action)(() => ApplyTrailStyle(preset))))
+            .ToList()));
+
         Section("Волна по клику", "Расходящееся кольцо в точке нажатия");
         ToggleRow("Включено", "Левая и правая кнопка мыши",
             () => _hub.Current.Ripple.Enabled,
@@ -650,6 +796,15 @@ internal sealed class SettingsForm : Form
         ColorRow("Цвет волны",
             () => _hub.Current.Ripple.Color,
             color => MutateLook(settings => settings.Ripple.Color = color));
+
+        Section("Стиль волны", "Только форма: радиус, длительность, толщина и цвет не меняются");
+        _rippleChips.Clear();
+        _rippleChips.AddRange(ChipRow("Пресеты волны", RippleStylePresets.All
+            .Select(preset => (
+                Text: preset.Name,
+                Selected: _hub.Current.RippleStyle == preset.Style,
+                OnClick: (Action)(() => ApplyRippleStyle(preset))))
+            .ToList()));
 
         Section("Частицы", "Небольшой салют из точки клика");
         ToggleRow("Включено", "Разлетаются и гаснут под действием гравитации",
@@ -678,6 +833,15 @@ internal sealed class SettingsForm : Form
         ColorRow("Цвет частиц",
             () => _hub.Current.Particles.Color,
             color => MutateLook(settings => settings.Particles.Color = color));
+
+        Section("Стиль частиц", "Только форма: количество, скорость, размер и цвет не меняются");
+        _particleChips.Clear();
+        _particleChips.AddRange(ChipRow("Пресеты частиц", ParticleStylePresets.All
+            .Select(preset => (
+                Text: preset.Name,
+                Selected: _hub.Current.ParticleStyle == preset.Style,
+                OnClick: (Action)(() => ApplyParticleStyle(preset))))
+            .ToList()));
     }
 
     // -------------------------------------------------------------- Selection
@@ -791,7 +955,7 @@ internal sealed class SettingsForm : Form
         if (!_hub.Current.PresetsEnabled)
             Paragraph("Блок пресетов отключён. Текущее оформление осталось прежним, карточки неактивны.", 28);
 
-        Section("Готовые наборы", "12 наборов: неон, гик, поп, граффити и тату");
+        Section("Готовые наборы", "19 наборов: база, неон, гик, поп, Sims, граффити и тату");
 
         var gap = S(12);
         var cardWidth = S(300);
@@ -812,11 +976,13 @@ internal sealed class SettingsForm : Form
 
         var active = _hub.Current.ActivePreset;
         var presetsEnabled = _hub.Current.PresetsEnabled;
+        _presetCards.Clear();
 
         foreach (var preset in Presets.All)
         {
             var card = new PresetCard
             {
+                PresetId = preset.Id,
                 Title = preset.Name,
                 Tagline = preset.Tagline,
                 TagText = preset.Tag,
@@ -831,12 +997,24 @@ internal sealed class SettingsForm : Form
             {
                 if (!_hub.Current.PresetsEnabled) return;
                 _hub.Update(settings => Presets.ApplyTo(settings, preset.Id));
-                RebuildPageDeferred();
+                UpdatePresetSelection();
+                UpdateStatus();
             };
             flow.Controls.Add(card);
+            _presetCards.Add(card);
         }
 
         Paragraph("Пресет можно донастроить вручную — после первого изменения в статусе появится «Свой набор».", 34);
+    }
+
+    private void UpdatePresetSelection()
+    {
+        var active = _hub.Current.ActivePreset;
+        foreach (var card in _presetCards)
+        {
+            if (card.IsDisposed) continue;
+            card.Selected = string.Equals(card.PresetId, active, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     // ---------------------------------------------------------------- System
@@ -862,7 +1040,7 @@ internal sealed class SettingsForm : Form
             () => _hub.Current.TargetFps,
             value => _hub.Update(settings => settings.TargetFps = (int)value),
             value => $"{value:0} FPS");
-        ToggleRow("Скрывать в полноэкранных приложениях", "Слой эффектов отключается в играх и на весь экран",
+        ToggleRow("Скрывать в полноэкранных приложениях", "Слой скрывается в играх; браузеры и веб-видео остаются",
             () => _hub.Current.HideInFullscreen,
             value => _hub.Update(settings => settings.HideInFullscreen = value));
 
@@ -882,7 +1060,8 @@ internal sealed class SettingsForm : Form
         Section("Как это работает");
         Paragraph("Эффекты рисуются отдельным прозрачным слоем поверх рабочего стола. " +
                   "Системный курсор не подменяется, поэтому остаются его текущий дизайн, тени и поведение в играх. " +
-                  "В окнах с повышенными правами (UAC) и на защищённом рабочем столе слой не виден — это ограничение Windows.", 58);
+                  "В окнах с повышенными правами (UAC) и на защищённом рабочем столе слой не виден — это ограничение Windows. " +
+                  "Чтобы эффекты работали поверх окон, запущенных от администратора, запустите Kursor Theme от имени администратора.", 72);
 
         Section("Файлы");
         var pathRow = NewRow(48);
@@ -958,13 +1137,13 @@ internal sealed class SettingsForm : Form
         {
             BeginInvoke(new Action(() =>
             {
-                BuildPage();
+                BuildPage(preserveScroll: true);
                 UpdateStatus();
             }));
             return;
         }
 
-        BuildPage();
+        BuildPage(preserveScroll: true);
         UpdateStatus();
     }
 
@@ -1003,6 +1182,7 @@ internal sealed class SettingsForm : Form
 
     protected override void OnFormClosed(FormClosedEventArgs e)
     {
+        Application.RemoveMessageFilter(this);
         _hub.Changed -= OnHubChanged;
         base.OnFormClosed(e);
     }

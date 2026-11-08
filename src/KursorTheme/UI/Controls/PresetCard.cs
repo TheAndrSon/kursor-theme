@@ -6,14 +6,26 @@ namespace KursorTheme.UI.Controls;
 internal sealed class PresetCard : Control
 {
     private bool _hover;
+    private bool _selected;
 
     public string Title { get; set; } = string.Empty;
     public string Tagline { get; set; } = string.Empty;
     public string TagText { get; set; } = string.Empty;
+    public string PresetId { get; set; } = string.Empty;
     public Color[] Dots { get; set; } = Array.Empty<Color>();
     public Color AccentColor { get; set; } = Theme.Accent;
-    public bool Selected { get; set; }
     public bool Dimmed { get; set; }
+
+    public bool Selected
+    {
+        get => _selected;
+        set
+        {
+            if (_selected == value) return;
+            _selected = value;
+            Invalidate();
+        }
+    }
 
     public event EventHandler? Activated;
 

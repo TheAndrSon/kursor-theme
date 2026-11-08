@@ -83,6 +83,10 @@ public static class SettingsStore
         s.Particles.LifetimeMs = Math.Clamp(s.Particles.LifetimeMs, 80, 4000);
         s.Particles.Size = Math.Clamp(s.Particles.Size, 0.5f, 24f);
 
+        if (!Enum.IsDefined(s.TrailStyle)) s.TrailStyle = TrailStyle.Ribbon;
+        if (!Enum.IsDefined(s.ParticleStyle)) s.ParticleStyle = ParticleStyle.Dots;
+        if (!Enum.IsDefined(s.RippleStyle)) s.RippleStyle = RippleStyle.Ring;
+
         var sel = s.Selection;
         sel.FillOpacity = Math.Clamp(sel.FillOpacity, 0f, 1f);
         sel.HatchOpacity = Math.Clamp(sel.HatchOpacity, 0f, 1f);
@@ -95,7 +99,7 @@ public static class SettingsStore
         sel.DimOpacity = Math.Clamp(sel.DimOpacity, 0f, 0.95f);
         sel.AutoHideMs = Math.Clamp(sel.AutoHideMs, 300, 20000);
 
-        if (string.IsNullOrWhiteSpace(s.ActivePreset)) s.ActivePreset = "neon";
+        if (string.IsNullOrWhiteSpace(s.ActivePreset)) s.ActivePreset = "base";
         return s;
     }
 }

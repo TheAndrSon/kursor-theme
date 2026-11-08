@@ -58,6 +58,6 @@ internal sealed class BrandPanel : Control
         }
 
         using var subtitleBrush = new SolidBrush(Theme.TextFaint);
-        graphics.DrawString("cursor effects  ·  v0.2", Theme.Tiny, subtitleBrush, new PointF(x, 60f));
+        graphics.DrawString("cursor effects  ·  v0.5", Theme.Tiny, subtitleBrush, new PointF(x, 60f));
     }
 }

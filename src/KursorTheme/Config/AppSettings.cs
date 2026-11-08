@@ -15,56 +15,61 @@ public sealed class AppSettings
 
     // Feature blocks
     public bool PresetsEnabled { get; set; } = true;
-    public bool SelectionEnabled { get; set; } = true;
-    public bool HotkeysEnabled { get; set; } = true;
+    public bool SelectionEnabled { get; set; } = false;
+    public bool HotkeysEnabled { get; set; } = false;
 
-    public string ActivePreset { get; set; } = "neon";
+    public string ActivePreset { get; set; } = "base";
 
     public GlowSettings Glow { get; set; } = new();
     public TrailSettings Trail { get; set; } = new();
     public RippleSettings Ripple { get; set; } = new();
     public ParticleSettings Particles { get; set; } = new();
     public SelectionSettings Selection { get; set; } = new();
+
+    // Independent shape presets (not overwritten by colour presets).
+    public TrailStyle TrailStyle { get; set; } = TrailStyle.Ribbon;
+    public ParticleStyle ParticleStyle { get; set; } = ParticleStyle.Dots;
+    public RippleStyle RippleStyle { get; set; } = RippleStyle.Ring;
 }
 
 public sealed class GlowSettings
 {
     public bool Enabled { get; set; } = true;
     public Color Color { get; set; } = Color.FromArgb(0x36, 0xE5, 0xFF);
-    public float Radius { get; set; } = 46f;
-    public float Intensity { get; set; } = 0.55f;
-    public float Pulse { get; set; } = 0.25f;
-    public float PulseSpeed { get; set; } = 0.9f;
+    public float Radius { get; set; } = 12f;
+    public float Intensity { get; set; } = 0.20f;
+    public float Pulse { get; set; } = 0.15f;
+    public float PulseSpeed { get; set; } = 1f;
 }
 
 public sealed class TrailSettings
 {
     public bool Enabled { get; set; } = true;
     public Color Color { get; set; } = Color.FromArgb(0x36, 0xE5, 0xFF);
-    public int LengthMs { get; set; } = 420;
-    public float Thickness { get; set; } = 10f;
-    public float Opacity { get; set; } = 0.5f;
+    public int LengthMs { get; set; } = 240;
+    public float Thickness { get; set; } = 3.5f;
+    public float Opacity { get; set; } = 0.70f;
 }
 
 public sealed class RippleSettings
 {
     public bool Enabled { get; set; } = true;
     public Color Color { get; set; } = Color.FromArgb(0x36, 0xE5, 0xFF);
-    public float MaxRadius { get; set; } = 90f;
-    public int DurationMs { get; set; } = 620;
-    public float Thickness { get; set; } = 2.4f;
-    public int Rings { get; set; } = 2;
+    public float MaxRadius { get; set; } = 30f;
+    public int DurationMs { get; set; } = 340;
+    public float Thickness { get; set; } = 2.0f;
+    public int Rings { get; set; } = 3;
 }
 
 public sealed class ParticleSettings
 {
     public bool Enabled { get; set; } = true;
     public Color Color { get; set; } = Color.FromArgb(0x8B, 0x5C, 0xF6);
-    public int Count { get; set; } = 12;
-    public float Speed { get; set; } = 340f;
-    public float Gravity { get; set; } = 700f;
-    public int LifetimeMs { get; set; } = 720;
-    public float Size { get; set; } = 3.4f;
+    public int Count { get; set; } = 15;
+    public float Speed { get; set; } = 450f;
+    public float Gravity { get; set; } = 1100f;
+    public int LifetimeMs { get; set; } = 600;
+    public float Size { get; set; } = 2.0f;
 }
 
 public sealed class SelectionSettings

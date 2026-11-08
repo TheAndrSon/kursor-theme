@@ -6,6 +6,7 @@ namespace KursorTheme.UI.Controls;
 internal sealed class NavButton : Control
 {
     private bool _hover;
+    private bool _selected;
 
     public NavButton()
     {
@@ -20,7 +21,16 @@ internal sealed class NavButton : Control
         Cursor = Cursors.Hand;
     }
 
-    public bool Selected { get; set; }
+    public bool Selected
+    {
+        get => _selected;
+        set
+        {
+            if (_selected == value) return;
+            _selected = value;
+            Invalidate();
+        }
+    }
 
     protected override void OnMouseEnter(EventArgs e)
     {

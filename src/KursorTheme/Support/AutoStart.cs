@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using KursorTheme.Interop;
 
 namespace KursorTheme.Support;
@@ -56,6 +57,11 @@ internal static class FullscreenDetector
         NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
         if (pid == (uint)Environment.ProcessId) return false;
 
+        // Keep effects visible in fullscreen browser tabs and web video.
+        // Browsers are not exclusive-fullscreen apps, and hiding the layer there
+        // is what makes it look like effects "do not work" in a browser.
+        if (IsBrowserProcess(pid)) return false;
+
         var builder = new System.Text.StringBuilder(128);
         NativeMethods.GetClassName(hwnd, builder, builder.Capacity);
         var className = builder.ToString();
@@ -73,5 +79,23 @@ internal static class FullscreenDetector
                && windowRect.Top <= screen.Top + 1
                && windowRect.Right >= screen.Right - 1
                && windowRect.Bottom >= screen.Bottom - 1;
+    }
+
+    private static readonly HashSet<string> BrowserProcesses = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "chrome", "msedge", "firefox", "opera", "brave", "vivaldi", "yandex", "thorium", "arc", "zen",
+    };
+
+    private static bool IsBrowserProcess(uint processId)
+    {
+        try
+        {
+            using var process = Process.GetProcessById((int)processId);
+            return BrowserProcesses.Contains(process.ProcessName);
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

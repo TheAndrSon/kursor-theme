@@ -66,7 +66,7 @@ internal sealed class TrayContext : ApplicationContext
         if (hub.Current.ShowNotifications)
         {
             _tray.ShowBalloonTip(4500, "Kursor Theme",
-                "Эффекты включены.\nCtrl+Alt+S — выделить область, Ctrl+Alt+E — пауза.",
+                "Эффекты включены.\nНастройки — в меню трея. Выделение и горячие клавиши по умолчанию выключены.",
                 ToolTipIcon.Info);
         }
 

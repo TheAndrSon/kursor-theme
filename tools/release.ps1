@@ -1,6 +1,6 @@
 param(
-    [string]$Tag = "v0.2.0",
-    [string]$NotesFile = "docs/release-notes-0.2.0.md",
+    [string]$Tag = "v0.5.0",
+    [string]$NotesFile = "docs/release-notes-0.5.0.md",
     [string]$Repo = "TheAndrSon/kursor-theme"
 )
 

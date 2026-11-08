@@ -17,7 +17,7 @@
     <Product>Kursor Theme</Product>
     <AssemblyTitle>Kursor Theme</AssemblyTitle>
     <Description>Live cursor effects and a styled selection overlay for Windows</Description>
-    <Version>0.2.0</Version>
+    <Version>0.5.0</Version>
 
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>

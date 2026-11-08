@@ -24,6 +24,7 @@ internal sealed class OverlayWindow : Form
     private Thread? _renderThread;
     private volatile bool _running;
     private IntPtr _windowHandle;
+    private double _topmostClock;
 
     public OverlayWindow(SettingsHub hub)
     {
@@ -162,6 +163,7 @@ internal sealed class OverlayWindow : Form
 
             if (!active)
             {
+                _topmostClock = 0;
                 _engine.Reset();
                 if (_lastDirty.Width > 0 && _lastDirty.Height > 0)
                 {
@@ -171,6 +173,19 @@ internal sealed class OverlayWindow : Form
                 }
 
                 return;
+            }
+
+            // Keep the click-through layer above other topmost windows (widgets,
+            // launchers, etc.), but never above our own settings/selection windows.
+            _topmostClock += deltaTime;
+            if (_topmostClock >= 1.2)
+            {
+                _topmostClock = 0;
+                if (!IsOwnProcessForeground())
+                {
+                    NativeMethods.SetWindowPos(_windowHandle, NativeMethods.HWND_TOPMOST, 0, 0, 0, 0,
+                        NativeMethods.SWP_NOMOVE | NativeMethods.SWP_NOSIZE | NativeMethods.SWP_NOACTIVATE);
+                }
             }
 
             _engine.Update(deltaTime, settings);
@@ -189,6 +204,15 @@ internal sealed class OverlayWindow : Form
 
             _lastDirty = current;
         }
+    }
+
+    private static bool IsOwnProcessForeground()
+    {
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (foreground == IntPtr.Zero) return false;
+
+        NativeMethods.GetWindowThreadProcessId(foreground, out var processId);
+        return processId == (uint)Environment.ProcessId;
     }
 
     private Rectangle ToLocal(RectangleF screenBounds)

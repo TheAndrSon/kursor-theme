@@ -13,7 +13,7 @@ Unicode true
 !endif
 
 !define APP_NAME "Kursor Theme"
-!define APP_VERSION "0.2.0"
+!define APP_VERSION "0.5.0"
 !define APP_PUBLISHER "Kursor Theme"
 !define APP_UNINSTALL_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\KursorTheme"
 
@@ -30,7 +30,7 @@ UninstallIcon "${APP_ICON}"
 ShowInstDetails nevershow
 ShowUninstDetails nevershow
 
-VIProductVersion "0.2.0.0"
+VIProductVersion "0.5.0.0"
 VIAddVersionKey "ProductName" "${APP_NAME}"
 VIAddVersionKey "CompanyName" "${APP_PUBLISHER}"
 VIAddVersionKey "FileDescription" "${APP_NAME} installer"

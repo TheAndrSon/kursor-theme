@@ -45,6 +45,7 @@ internal sealed class ToggleSwitch : Control
             if (_checked == value) return;
             _checked = value;
             _animation.Start();
+            Invalidate();
             CheckedChanged?.Invoke(this, EventArgs.Empty);
         }
     }
