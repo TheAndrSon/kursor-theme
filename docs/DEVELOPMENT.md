@@ -1,0 +1,109 @@
+# Разработка Kursor Theme
+
+## Требования
+
+- Windows 10/11 x64.
+- .NET SDK 8. Проект рассчитан на локальную установку SDK в
+  `%LOCALAPPDATA%\Microsoft\dotnet` (без прав администратора). Скрипты используют её,
+  если она есть, иначе — системный `dotnet`.
+- PowerShell 5.1+.
+- NSIS не обязателен: `make-installer.ps1` скачает портативную сборку в `tools\nsis`.
+
+## Скрипты
+
+| Скрипт | Назначение |
+| --- | --- |
+| `build.ps1` | Debug/Release сборка решения |
+| `run.ps1` | Сборка (если нужно) и запуск из `src\...\bin\Release` |
+| `run.ps1 --settings` | Запуск с открытой панелью настроек |
+| `publish.ps1` | Self-contained single-file в `publish\` |
+| `make-installer.ps1` | `dist\KursorTheme.exe`, `dist\KursorTheme-portable.zip`, `dist\KursorThemeSetup.exe` |
+| `tools/make-icon.ps1` | Перегенерация `Assets\AppIcon.ico` (multi-size PNG ICO) |
+
+Пример:
+
+```powershell
+.\build.ps1
+.\run.ps1 --settings
+.\make-installer.ps1 -SkipPublish   # если publish уже актуален
+```
+
+## Структура
+
+```
+src/KursorTheme
+  Program.cs                 вход, single-instance mutex, глобальные обработчики ошибок
+  App/TrayContext.cs         трей, меню, координация оверлеев и настроек
+  App/HotkeyWindow.cs        RegisterHotKey + WM_HOTKEY
+  Config/AppSettings.cs      модель настроек (эффекты, выделение, блоки)
+  Config/Presets.cs          12 пресетов
+  Config/SettingsHub.cs      потокобезопасный снимок настроек + отложенное сохранение
+  Overlay/OverlayWindow.cs   полноэкранный click-through layered-оверлей
+  Overlay/EffectsEngine.cs   свечение, шлейф, кольца, частицы
+  Overlay/SelectionOverlay.cs интерактивное выделение с штриховкой
+  Rendering/LayeredCanvas.cs DIB-поверхность + UpdateLayeredWindowIndirect
+  UI/SettingsForm.cs         панель настроек
+  UI/Controls/*              кастомные контролы (слайдер, тумблер, скроллбар и т.д.)
+```
+
+## Как работает рендеринг
+
+1. `OverlayWindow` создаёт окно на весь виртуальный экран с расширенными стилями
+   `LAYERED | TRANSPARENT | TOOLWINDOW | NOACTIVATE`.
+2. `LayeredCanvas` держит top-down 32bpp DIB и `Graphics` поверх него. Альфа попиксельная.
+3. Отдельный поток крутит цикл ~`TargetFps`, читает курсор и кнопки.
+4. `EffectsEngine` обновляет состояние и рисует эффекты; вычисляется bounding box.
+5. Изменённая область очищается и презентуется через `UpdateLayeredWindowIndirect`
+   с `prcDirty` — обновляется только «грязный» прямоугольник.
+6. При `EffectsEnabled = false` или `IsSuspended` слой очищается и не рисуется.
+
+Выделение — отдельное layered-окно: затемнение, «дырка», заливка, штриховка,
+контур и бейдж. Отрисовка идёт по таймеру 16 мс, dirty-регион — объединение
+старой и новой области.
+
+## Блоки функций
+
+`AppSettings` содержит независимые флаги:
+
+- `EffectsEnabled` — рендер оверлея.
+- `PresetsEnabled` — применение пресетов в UI.
+- `SelectionEnabled` — `Ctrl+Alt+S`, пункт трея и кнопка «Запустить».
+- `HotkeysEnabled` — регистрация/снятие глобальных горячих клавиш в `TrayContext`.
+
+Флаги доступны из разделов настроек и из «Система → Блоки функций».
+
+## Тестирование
+
+Автоматических тестов нет; используется ручной чек-лист:
+
+1. `.\run.ps1 --settings` — панель открывается на основном мониторе.
+2. Пройти все 4 раздела, проверить, что подзаголовок не пересекается с кнопкой «Сбросить».
+3. Эффекты: включить/выключить блок, проверить пропадание ореола; проверить пресеты.
+4. Выделение: `Ctrl+Alt+S`, протянуть область, проверить штриховку/уголки/бейдж, `Esc`.
+5. Блоки: отключить выделение — `Ctrl+Alt+S` не открывает оверлей;
+   отключить пресеты — карточки затемнены и не применяются;
+   отключить горячие клавиши — сочетания не работают.
+6. `Ctrl+Alt+E` — пауза/включение эффектов.
+7. Проверить перезапуск: настройки восстанавливаются из
+   `%APPDATA%\KursorTheme\settings.json`.
+8. Установщик: установить в тестовую папку, проверить ярлыки и удаление.
+
+## Релиз
+
+1. Поднять версию: `KursorTheme.csproj`, `BrandPanel`, `SettingsForm`, `installer/KursorTheme.nsi`.
+2. `.\make-installer.ps1`.
+3. Проверить `dist\KursorThemeSetup.exe` на чистой установке и удалении.
+4. `git tag v0.2.0 && git push --tags`.
+5. `gh release create v0.2.0 dist\KursorThemeSetup.exe dist\KursorTheme-portable.zip --title ...`
+
+## Частые проблемы
+
+- **Ошибка «You must install .NET Desktop Runtime»** при запуске exe из `bin\`:
+  установлен только runtime 6. Используйте `run.ps1`/`publish` — self-contained версия
+  не требует установленного .NET.
+- **Горячие клавиши не работают**: заняты другой программой (лог `%APPDATA%\KursorTheme\logs\app.log`)
+  или отключён блок «Горячие клавиши».
+- **Настройки не открываются из трея**: проверьте, что окно не уехало на другой монитор;
+  оно центрируется на основном мониторе и открывается поверх остальных окон.
+- **Anti-cheat/игры**: слой скрывается в полноэкранных приложениях; в некоторых играх
+  оверлеи запрещены правилами.

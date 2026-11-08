@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+publish/
+dist/
+artifacts/
+tools/dotnet/
+tools/nsis/
